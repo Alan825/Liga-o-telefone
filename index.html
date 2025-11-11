@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Enviar o gemidão</title>
+<style>
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b1220;color:#e6eef8}
+  .card{width:100%;max-width:420px;padding:18px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+  label{font-size:13px;color:#9fb8db}
+  input{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);background:transparent;color:inherit;margin-top:8px}
+  .row{display:flex;gap:8px;margin-top:12px}
+  button{flex:1;padding:12px;border-radius:10px;border:0;cursor:pointer;font-weight:700}
+  .call{background:linear-gradient(90deg,#ff6b6b,#ff3b3b);color:#fff}
+  .stop{background:#1f2937;color:#fff}
+  .hint{font-size:13px;color:#9fb8db;margin-top:10px}
+  /* tela grande */
+  .fake{display:none;position:fixed;inset:0;align-items:center;justify-content:center;z-index:9999;flex-direction:column}
+  .fake.show{display:flex;background:radial-gradient(circle at 20% 20%, rgba(255,0,0,0.12), rgba(0,0,0,0.9))}
+  .caller{background:rgba(255,255,255,0.02);padding:20px;border-radius:14px;text-align:center}
+  .caller h2{margin:0;font-size:30px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>Enviar gemidão do zap</h2>
+    <label for="num">Número (+55)</label>
+    <input id="num" placeholder="+55 (xx) 9xxxx-xxxx" />
+
+    <div class="row">
+      <button id="btnCall" class="call">📲 Ligar </button>
+      <button id="btnStop" class="stop">⏹️ Parar</button>
+    </div>
+    <p class="hint">O áudio tocará assim que o telefone atender a ligação</p>
+  </div>
+
+  <div id="fake" class="fake" aria-hidden="true">
+    <div class="caller">
+      <h2>Chamando...</h2>
+      <p id="numDisplay"></p>
+    </div>
+  </div>
+
+<script>
+
+const audioSrc = 'audio/gemidao do ZAP estourado - VITU GOSTOSO (youtube).mp3'; 
+const btnCall = document.getElementById('btnCall');
+const btnStop = document.getElementById('btnStop');
+const numInput = document.getElementById('num');
+const numDisplay = document.getElementById('numDisplay');
+const fake = document.getElementById('fake');
+
+let audioContext, sourceNode, gainNode, buffer;
+
+async function setupAudio() {
+  if (audioContext) return;
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  gainNode = audioContext.createGain();
+  gainNode.gain.value = 1.0; // máximo do nó de ganho (não do volume do sistema)
+  gainNode.connect(audioContext.destination);
+
+  // fetch e decode do áudio para evitar latência ao tocar
+  try {
+    const resp = await fetch(audioSrc);
+    const arr = await resp.arrayBuffer();
+    buffer = await audioContext.decodeAudioData(arr);
+  } catch (err) {
+    console.error('Erro ao carregar/decodificar áudio:', err);
+    alert('Não foi possível carregar o áudio. Verifique o caminho do arquivo.');
+  }
+}
+
+function playAudioLoop() {
+  if (!audioContext || !buffer) return;
+  
+  sourceNode = audioContext.createBufferSource();
+  sourceNode.buffer = buffer;
+  sourceNode.loop = true;
+  sourceNode.connect(gainNode);
+  sourceNode.start(0);
+}
+
+function stopAudio() {
+  try {
+    if (sourceNode) sourceNode.stop(0);
+  } catch(e){}
+  sourceNode = null;
+  // tentar suspender contexto
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext.suspend().catch(()=>{});
+  }
+}
+
+async function ensureResumeContext() {
+  if (!audioContext) return;
+  if (audioContext.state === 'suspended') {
+    try {
+      await audioContext.resume();
+    } catch(e){
+      console.warn('Falha ao resumir audioContext', e);
+    }
+  }
+}
+
+btnCall.addEventListener('click', async () => {
+
+  await setupAudio();
+  await ensureResumeContext();
+
+ 
+
+ 
+  numDisplay.textContent = numInput.value || '';
+  fake.classList.add('show');
+
+
+  if (navigator.vibrate) navigator.vibrate([300,100,300]);
+
+  // tenta fullscreen
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(()=>{});
+  }
+
+  playAudioLoop();
+});
+
+btnStop.addEventListener('click', () => {
+  stopAudio();
+  fake.classList.remove('show');
+  if (navigator.vibrate) navigator.vibrate(0);
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(()=>{});
+  }
+});
+
+// tecla ESC para parar também
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') btnStop.click();
+});
+</script>
+</body>
+</html>
